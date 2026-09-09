@@ -4,7 +4,7 @@ import { GESTURE_CONFIG } from "../config/gestureConfig";
 import { lerp } from "../lib/math";
 import { useInteraction } from "../interaction/InteractionProvider";
 import { usePlayer } from "../player/PlayerProvider";
-import { classifyHandPose, palmAngle, palmCenter } from "./handPose";
+import { classifyHandPose, palmAngle, palmCenter, wrapAngle } from "./handPose";
 import type { HandPose, HandSide } from "./handPose";
 import { createTiltState, stepTilt } from "./headPose";
 
@@ -35,9 +35,20 @@ export function useHandTracking() {
   const lastVideoTime = useRef(-1);
   const smooth = useRef({ x: 0.5, y: 0.5, ready: false });
   const poseFrames = useRef<
-    Record<string, { pinch: number; open: number; two: number; thumb: number }>
+    Record<
+      string,
+      {
+        pinch: number;
+        open: number;
+        two: number;
+        thumb: number;
+        pose: HandPose;
+        angle: number;
+      }
+    >
   >({});
   const seenHandRef = useRef(false);
+  const lostFramesRef = useRef(0);
   const tiltRef = useRef(createTiltState());
   const sessionRef = useRef(0);
 
@@ -59,6 +70,7 @@ export function useHandTracking() {
     faceRef.current = null;
     lastVideoTime.current = -1;
     poseFrames.current = {};
+    lostFramesRef.current = 0;
     tiltRef.current = createTiltState();
     setHandUnavailable();
   }, [setHandUnavailable]);
@@ -95,6 +107,8 @@ export function useHandTracking() {
     }
     const landmarks = result.landmarks;
     if (!landmarks.length) {
+      lostFramesRef.current += 1;
+      if (lostFramesRef.current < GESTURE_CONFIG.handLostFrames) return;
       poseFrames.current = {};
       if (seenHandRef.current) {
         seenHandRef.current = false;
@@ -103,9 +117,11 @@ export function useHandTracking() {
       }
       return;
     }
+    lostFramesRef.current = 0;
     seenHandRef.current = true;
 
     const hold = GESTURE_CONFIG.poseFrames;
+    const release = GESTURE_CONFIG.poseReleaseFrames;
     const hands = landmarks.map((hand, index) => {
       const label = result.handedness[index]?.[0]?.categoryName;
       const handedness: HandSide =
@@ -117,23 +133,34 @@ export function useHandTracking() {
         open: 0,
         two: 0,
         thumb: 0,
+        pose: "idle" as HandPose,
+        angle: palmAngle(hand),
       };
-      frames.pinch = rawPose === "pinch" ? frames.pinch + 1 : 0;
-      frames.open = rawPose === "openPalm" ? frames.open + 1 : 0;
-      frames.two = rawPose === "twoFingers" ? frames.two + 1 : 0;
-      frames.thumb = rawPose === "thumbsUp" ? frames.thumb + 1 : 0;
-      poseFrames.current[key] = frames;
+      frames.pinch =
+        rawPose === "pinch" ? Math.min(6, frames.pinch + 1) : Math.max(0, frames.pinch - 1);
+      frames.open =
+        rawPose === "openPalm" ? Math.min(6, frames.open + 1) : Math.max(0, frames.open - 1);
+      frames.two =
+        rawPose === "twoFingers" ? Math.min(6, frames.two + 1) : Math.max(0, frames.two - 1);
+      frames.thumb =
+        rawPose === "thumbsUp" ? Math.min(6, frames.thumb + 1) : Math.max(0, frames.thumb - 1);
 
       const pose: HandPose =
-        frames.pinch >= GESTURE_CONFIG.pinchFrames
+        frames.pinch >= (frames.pose === "pinch" ? release : GESTURE_CONFIG.pinchFrames)
           ? "pinch"
-          : frames.thumb >= hold
+          : frames.thumb >= (frames.pose === "thumbsUp" ? release : hold)
             ? "thumbsUp"
-            : frames.two >= hold
+            : frames.two >= (frames.pose === "twoFingers" ? release : hold)
               ? "twoFingers"
-              : frames.open >= GESTURE_CONFIG.openPalmFrames
+              : frames.open >=
+                  (frames.pose === "openPalm" ? release : GESTURE_CONFIG.openPalmFrames)
                 ? "openPalm"
                 : "idle";
+      frames.pose = pose;
+
+      const rawAngle = palmAngle(hand);
+      frames.angle += wrapAngle(rawAngle - frames.angle) * 0.28;
+      poseFrames.current[key] = frames;
 
       const point =
         pose === "pinch"
@@ -144,7 +171,7 @@ export function useHandTracking() {
         y: point.y,
         visible: true,
         pose,
-        angle: palmAngle(hand),
+        angle: frames.angle,
         handedness,
       };
     });
@@ -152,7 +179,10 @@ export function useHandTracking() {
     const primary = hands[0];
     if (primary) {
       const s = smooth.current;
-      const p = GESTURE_CONFIG.pointerSmoothing;
+      const p =
+        primary.pose === "pinch"
+          ? GESTURE_CONFIG.pinchSmoothing
+          : GESTURE_CONFIG.pointerSmoothing;
       if (!s.ready) {
         s.x = primary.x;
         s.y = primary.y;
@@ -178,7 +208,7 @@ export function useHandTracking() {
     try {
       const session = ++sessionRef.current;
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: 640, height: 480 },
+        video: { facingMode: "user", width: { ideal: 960 }, height: { ideal: 720 } },
         audio: false,
       });
       if (session !== sessionRef.current) {
@@ -198,9 +228,9 @@ export function useHandTracking() {
       const handOptions = {
         runningMode: "VIDEO" as const,
         numHands: 2,
-        minHandDetectionConfidence: 0.65,
-        minHandPresenceConfidence: 0.65,
-        minTrackingConfidence: 0.65,
+        minHandDetectionConfidence: 0.72,
+        minHandPresenceConfidence: 0.7,
+        minTrackingConfidence: 0.62,
       };
       let landmarker: HandLandmarker;
       try {
@@ -229,9 +259,9 @@ export function useHandTracking() {
       const faceOptions = {
         runningMode: "VIDEO" as const,
         numFaces: 1,
-        minFaceDetectionConfidence: 0.4,
-        minFacePresenceConfidence: 0.4,
-        minTrackingConfidence: 0.4,
+        minFaceDetectionConfidence: 0.5,
+        minFacePresenceConfidence: 0.5,
+        minTrackingConfidence: 0.5,
       };
       void (async () => {
         let face: FaceLandmarker | null = null;

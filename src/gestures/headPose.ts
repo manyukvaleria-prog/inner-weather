@@ -59,16 +59,22 @@ export function stepTilt(
   landmarks: Landmark[],
   now: number,
 ): "next" | "previous" | null {
-  const { roll } = facePose(landmarks);
-  state.roll += (roll - state.roll) * 0.4;
+  const { roll, yaw } = facePose(landmarks);
+  state.roll += (roll - state.roll) * 0.22;
 
-  if (state.samples.length < 16) {
+  if (state.samples.length < 18) {
     state.samples.push(state.roll);
-    if (state.samples.length >= 10) {
+    if (state.samples.length >= 12) {
       const sorted = [...state.samples].sort((a, b) => a - b);
       state.rest = sorted[Math.floor(sorted.length / 2)];
       state.armed = true;
     }
+    return null;
+  }
+
+  if (Math.abs(yaw) > GESTURE_CONFIG.tiltMaxYaw) {
+    state.dir = 0;
+    state.frames = 0;
     return null;
   }
 

@@ -7,22 +7,26 @@
  * right palm twist — volume
  */
 export const GESTURE_CONFIG = {
-  pointerSmoothing: 0.42,
-  openPalmFrames: 3,
-  pinchFrames: 2,
-  poseFrames: 3,
-  fingerExtendRatio: 1.12,
-  pinchRatio: 0.5,
+  pointerSmoothing: 0.2,
+  pinchSmoothing: 0.34,
+  openPalmFrames: 5,
+  pinchFrames: 4,
+  poseFrames: 5,
+  poseReleaseFrames: 2,
+  handLostFrames: 8,
+  fingerExtendRatio: 1.14,
+  pinchRatio: 0.4,
 
-  headTiltRad: 0.16,
-  tiltHoldFrames: 4,
-  tiltCooldownMs: 720,
+  headTiltRad: 0.22,
+  tiltHoldFrames: 6,
+  tiltCooldownMs: 880,
+  tiltMaxYaw: 0.42,
 
-  rotateDeadzone: 0.03,
-  rotateSensitivity: 0.22,
-  rotateMaxTranslation: 0.038,
+  rotateDeadzone: 0.05,
+  rotateSensitivity: 0.16,
+  rotateMaxTranslation: 0.026,
 
-  poseCooldownMs: 650,
+  poseCooldownMs: 900,
 
   absorbRadius: 0.2,
   grabRadius: 110,

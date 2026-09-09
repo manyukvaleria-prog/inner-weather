@@ -171,7 +171,9 @@ export function TrackBubbles() {
     return (
       <div key={track.id} className={`track-orbit__slot ${flying ? "is-held" : ""}`}>
         <span className="track-orbit__ghost" aria-hidden="true">
-          <span className="track-orbit__ghost-disc" />
+          <span className="track-orbit__ghost-disc">
+            <img src={track.cover} alt="" draggable={false} />
+          </span>
           <span className="track-orbit__ghost-meta">
             <strong>{track.title}</strong>
             <em>{track.artist}</em>

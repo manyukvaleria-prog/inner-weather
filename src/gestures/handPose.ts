@@ -20,9 +20,9 @@ function fingerExtended(hand: Landmark[], tip: number, pip: number): boolean {
   );
 }
 
-function fingerFolded(hand: Landmark[], tip: number, pip: number): boolean {
+function fingerFolded(hand: Landmark[], tip: number, pip: number, ratio = 0.98): boolean {
   const wrist = hand[0];
-  return landmarkDist(hand[tip], wrist) < landmarkDist(hand[pip], wrist) * 1.06;
+  return landmarkDist(hand[tip], wrist) < landmarkDist(hand[pip], wrist) * ratio;
 }
 
 export function isPinch(hand: Landmark[]): boolean {
@@ -33,8 +33,9 @@ export function isPinch(hand: Landmark[]): boolean {
 export function isThumbsUp(hand: Landmark[]): boolean {
   if (hand.length < 21) return false;
   const thumbUp =
-    landmarkDist(hand[4], hand[0]) > landmarkDist(hand[3], hand[0]) * 1.08 &&
-    hand[4].y < hand[0].y - 0.02;
+    landmarkDist(hand[4], hand[0]) > landmarkDist(hand[3], hand[0]) * 1.12 &&
+    hand[4].y < hand[2].y - 0.03 &&
+    hand[4].y < hand[0].y - 0.04;
   const others =
     fingerFolded(hand, 8, 6) &&
     fingerFolded(hand, 12, 10) &&
@@ -47,8 +48,11 @@ export function isTwoFingers(hand: Landmark[]): boolean {
   if (hand.length < 21) return false;
   if (isPinch(hand)) return false;
   const pair = fingerExtended(hand, 8, 6) && fingerExtended(hand, 12, 10);
-  const rest = fingerFolded(hand, 16, 14) && fingerFolded(hand, 20, 18);
-  return pair && rest && !isPinch(hand);
+  const rest =
+    fingerFolded(hand, 16, 14, 1.02) &&
+    fingerFolded(hand, 20, 18, 1.02) &&
+    hand[4].y > Math.min(hand[8].y, hand[12].y);
+  return pair && rest;
 }
 
 export function isOpenPalm(hand: Landmark[]): boolean {
