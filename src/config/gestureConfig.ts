@@ -7,13 +7,13 @@
  * right palm twist — volume
  */
 export const GESTURE_CONFIG = {
-  pointerSmoothing: 0.2,
-  pinchSmoothing: 0.34,
+  pointerSmoothing: 0.62,
+  pinchSmoothing: 0.82,
   openPalmFrames: 5,
   pinchFrames: 4,
   poseFrames: 5,
   poseReleaseFrames: 2,
-  handLostFrames: 8,
+  handLostFrames: 5,
   fingerExtendRatio: 1.14,
   pinchRatio: 0.4,
 
@@ -34,5 +34,5 @@ export const GESTURE_CONFIG = {
   playlistEdge: 0.78,
   blobHitRadius: 0.17,
   tapMaxDistance: 0.045,
-  trailLength: 14,
+  trailLength: 7,
 } as const;

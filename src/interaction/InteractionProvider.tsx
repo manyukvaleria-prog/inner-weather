@@ -68,6 +68,7 @@ function createGestureState(): GestureState {
 
 type InteractionContextValue = {
   pointer: PointerState;
+  pointerLive: RefObject<PointerState>;
   playlistOpen: boolean;
   playlistRef: RefObject<HTMLDivElement>;
   updateHands: (hands: HandInput[]) => void;
@@ -149,6 +150,17 @@ export function InteractionProvider({ children }: { children: ReactNode }) {
     handVisible: false,
   });
   const [playlistOpen, setPlaylistOpen] = useState(false);
+  const pointerLive = useRef<PointerState>({
+    x: 0.5,
+    y: 0.5,
+    clientX: typeof window === "undefined" ? 0 : window.innerWidth * 0.5,
+    clientY: typeof window === "undefined" ? 0 : window.innerHeight * 0.5,
+    pressed: false,
+    openPalm: false,
+    pose: "idle",
+    source: "mouse",
+    handVisible: false,
+  });
 
   const gestures = useRef({
     Left: createGestureState(),
@@ -184,7 +196,7 @@ export function InteractionProvider({ children }: { children: ReactNode }) {
     const cursor =
       hands.find((hand) => hand.handedness === "Right") ??
       hands[0];
-    setPointer({
+    const nextPointer: PointerState = {
       x: cursor.x,
       y: cursor.y,
       clientX: cursor.x * window.innerWidth,
@@ -194,6 +206,20 @@ export function InteractionProvider({ children }: { children: ReactNode }) {
       pose: cursor.pose,
       source: "hand",
       handVisible: true,
+    };
+    pointerLive.current = nextPointer;
+    setPlaylistOpen(cursor.x >= GESTURE_CONFIG.playlistEdge);
+    setPointer((current) => {
+      if (
+        current.pose === nextPointer.pose &&
+        current.handVisible === nextPointer.handVisible &&
+        current.pressed === nextPointer.pressed &&
+        current.openPalm === nextPointer.openPalm &&
+        current.source === nextPointer.source
+      ) {
+        return current;
+      }
+      return nextPointer;
     });
 
     hands.forEach((input) => {
@@ -278,6 +304,14 @@ export function InteractionProvider({ children }: { children: ReactNode }) {
     resetGesture(gestures.current.Left, "idle", 0.5, 0.5);
     resetGesture(gestures.current.Right, "idle", 0.5, 0.5);
     resetGesture(gestures.current.unknown, "idle", 0.5, 0.5);
+    pointerLive.current = {
+      ...pointerLive.current,
+      pressed: false,
+      openPalm: false,
+      pose: "idle",
+      source: "mouse",
+      handVisible: false,
+    };
     setPointer((prev) => ({
       ...prev,
       pressed: false,
@@ -342,6 +376,7 @@ export function InteractionProvider({ children }: { children: ReactNode }) {
   const value = useMemo<InteractionContextValue>(
     () => ({
       pointer,
+      pointerLive,
       playlistOpen,
       playlistRef,
       updateHands,

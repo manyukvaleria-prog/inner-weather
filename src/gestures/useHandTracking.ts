@@ -1,7 +1,7 @@
 import type { FaceLandmarker, HandLandmarker } from "@mediapipe/tasks-vision";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { GESTURE_CONFIG } from "../config/gestureConfig";
-import { lerp } from "../lib/math";
+import { clamp, lerp } from "../lib/math";
 import { useInteraction } from "../interaction/InteractionProvider";
 import { usePlayer } from "../player/PlayerProvider";
 import { classifyHandPose, palmAngle, palmCenter, wrapAngle } from "./handPose";
@@ -51,6 +51,7 @@ export function useHandTracking() {
   const lostFramesRef = useRef(0);
   const tiltRef = useRef(createTiltState());
   const sessionRef = useRef(0);
+  const faceTickRef = useRef(0);
 
   const fireSkip = useCallback((skip: "next" | "previous" | null) => {
     if (skip === "next") nextRef.current();
@@ -83,10 +84,19 @@ export function useHandTracking() {
     if (video.currentTime === lastVideoTime.current) return;
     lastVideoTime.current = video.currentTime;
     const timestamp = performance.now();
+
+    let result: ReturnType<HandLandmarker["detectForVideo"]>;
+    try {
+      result = landmarker.detectForVideo(video, timestamp);
+    } catch {
+      return;
+    }
+
     const face = faceRef.current;
-    if (face) {
+    faceTickRef.current += 1;
+    if (face && faceTickRef.current % 3 === 0) {
       try {
-        const faces = face.detectForVideo(video, timestamp);
+        const faces = face.detectForVideo(video, timestamp + 1);
         const mesh = faces.faceLandmarks[0];
         if (mesh) fireSkip(stepTilt(tiltRef.current, mesh, timestamp));
         else {
@@ -97,13 +107,6 @@ export function useHandTracking() {
       } catch {
         /* frame dropped */
       }
-    }
-
-    let result: ReturnType<HandLandmarker["detectForVideo"]>;
-    try {
-      result = landmarker.detectForVideo(video, timestamp);
-    } catch {
-      return;
     }
     const landmarks = result.landmarks;
     if (!landmarks.length) {
@@ -179,15 +182,17 @@ export function useHandTracking() {
     const primary = hands[0];
     if (primary) {
       const s = smooth.current;
-      const p =
-        primary.pose === "pinch"
-          ? GESTURE_CONFIG.pinchSmoothing
-          : GESTURE_CONFIG.pointerSmoothing;
       if (!s.ready) {
         s.x = primary.x;
         s.y = primary.y;
         s.ready = true;
       } else {
+        const jump = Math.hypot(primary.x - s.x, primary.y - s.y);
+        const base =
+          primary.pose === "pinch"
+            ? GESTURE_CONFIG.pinchSmoothing
+            : GESTURE_CONFIG.pointerSmoothing;
+        const p = clamp(base + jump * 4.2, base, 0.94);
         s.x = lerp(s.x, primary.x, p);
         s.y = lerp(s.y, primary.y, p);
       }
@@ -208,7 +213,12 @@ export function useHandTracking() {
     try {
       const session = ++sessionRef.current;
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 960 }, height: { ideal: 720 } },
+        video: {
+          facingMode: "user",
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          frameRate: { ideal: 30 },
+        },
         audio: false,
       });
       if (session !== sessionRef.current) {
@@ -227,10 +237,10 @@ export function useHandTracking() {
       const fileset = await vision.FilesetResolver.forVisionTasks(WASM_URL);
       const handOptions = {
         runningMode: "VIDEO" as const,
-        numHands: 2,
-        minHandDetectionConfidence: 0.72,
-        minHandPresenceConfidence: 0.7,
-        minTrackingConfidence: 0.62,
+        numHands: 1,
+        minHandDetectionConfidence: 0.6,
+        minHandPresenceConfidence: 0.55,
+        minTrackingConfidence: 0.5,
       };
       let landmarker: HandLandmarker;
       try {
@@ -268,13 +278,13 @@ export function useHandTracking() {
         try {
           face = await vision.FaceLandmarker.createFromOptions(fileset, {
             ...faceOptions,
-            baseOptions: { modelAssetPath: FACE_MODEL_URL, delegate: "CPU" },
+            baseOptions: { modelAssetPath: FACE_MODEL_URL, delegate: "GPU" },
           });
         } catch {
           try {
             face = await vision.FaceLandmarker.createFromOptions(fileset, {
               ...faceOptions,
-              baseOptions: { modelAssetPath: FACE_MODEL_URL, delegate: "GPU" },
+              baseOptions: { modelAssetPath: FACE_MODEL_URL, delegate: "CPU" },
             });
           } catch {
             face = null;
