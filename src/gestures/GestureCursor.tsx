@@ -17,7 +17,7 @@ export function GestureCursor() {
     const tick = () => {
       raf = requestAnimationFrame(tick);
       const current = pointerLive.current;
-      if (!current.handVisible) {
+      if (!current?.handVisible) {
         trailRef.current = [];
         return;
       }

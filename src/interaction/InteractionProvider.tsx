@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MutableRefObject,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -68,7 +69,7 @@ function createGestureState(): GestureState {
 
 type InteractionContextValue = {
   pointer: PointerState;
-  pointerLive: RefObject<PointerState>;
+  pointerLive: MutableRefObject<PointerState>;
   playlistOpen: boolean;
   playlistRef: RefObject<HTMLDivElement>;
   updateHands: (hands: HandInput[]) => void;
